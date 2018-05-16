@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime
 from sklearn.linear_model import LinearRegression
 from cvxopt import matrix, solvers
+from utils import PnL, gmean, MaxDrawdown, Volatility, SharpRatio, Kurtosis, Skewness
 
 #download data of ETFs
 ticker = ["FXE","EWJ","GLD","QQQ","SPY","SHV","DBA","USO",
@@ -12,9 +13,10 @@ ticker = ["FXE","EWJ","GLD","QQQ","SPY","SHV","DBA","USO",
 start =  datetime(2007, 1, 1)
 end = datetime(2016, 10, 20)
 data = pd.DataFrame()
-for i in ticker:
-    data[i] = DataReader(i, 'yahoo', start, end)["Close"]
-data.to_csv("ETFs.csv")
+
+# for i in ticker:
+#     data[i] = DataReader(i, 'yahoo', start, end)["Close"]
+# data.to_csv("ETFs.csv")
 
 #load data
 ETF = pd.read_csv("ETFs.csv", index_col=0)[55:]
@@ -25,12 +27,17 @@ R = (ETF.pct_change(1)[1:])*250
 #calculate the excess annualized return for the ETFs
 ER = pd.DataFrame(R.values-F["RF"].values.reshape(-1,1),
                   index=F.index, columns=ticker)
+
 F = F.iloc[:,0:3]
 
+
+R_bc = R["2008-03-24":"2009-06-30"].values
+ER_bc = ER["2008-03-24":"2009-06-30"].values
+F_bc = F["2008-03-24":"2009-06-30"].values
 # Before crisis("2007-03-26"-"2008-03-23")
-R_bc = R["2009-06-30":"2016-10-20"].values
-ER_bc = ER["2009-06-30":"2016-10-20"].values
-F_bc = F["2009-06-30":"2016-10-20"].values
+# R_bc = R["2009-06-30":"2016-10-20"].values
+# ER_bc = ER["2009-06-30":"2016-10-20"].values
+# F_bc = F["2009-06-30":"2016-10-20"].values
 Num_days = len(F_bc)
 FR_bc = F_bc[1:].copy()
 #short term model(60 days)
@@ -39,8 +46,10 @@ beta_T = [0.5, 1, 1.5]
 R_opt = {}
 
 #conduct the max return strategy
-window = 60
+window = 63
 alocate = 5
+R_opt["SPY"] = R_bc[window:,4]/250
+
 
 for j in beta_T:
     Rp = []
@@ -60,7 +69,8 @@ for j in beta_T:
             beta = coeff3[:,0]
             error = er - lm.predict(f1)
             #calculate the covariance matrix
-            Q = coeff3.dot(cov_f).dot(coeff3.T)+np.diag(error.var(axis=0))
+            # Q = coeff3.dot(cov_f).dot(coeff3.T)+np.diag(error.var(axis=0))
+            Q = np.diag([1]*13)
             #preparation for the optimization
             P = matrix(2*Lambda*Q, tc='d')
             q = matrix(-2*Lambda*(Q.T).dot(wp)-rho, tc='d')
@@ -72,7 +82,7 @@ for j in beta_T:
             opt = solvers.qp(P, q, G, h, A, b, options={'show_progress':False})
             w = opt['x']
             wp = np.array(w).reshape(-1,1)
-        Rp = Rp + [wp.T.dot(future_return)[0,0]]
+        Rp = Rp + [wp.T.dot(future_return/250)[0,0]]
     R_opt['beta=%s' % j]=Rp
 
 #R_opt = pd.DataFrame(np.array(R_opt).transpose())
@@ -96,9 +106,10 @@ for i in range(window, Num_days):
         error = er - lm.predict(f1)
         #calculate the covariance matrix
         Q = coeff3.dot(cov_f).dot(coeff3.T)+np.diag(error.var(axis=0))
+        Q_ = np.diag([1]*13)
         #preparation for the optimization
-        P = matrix(2*(1+Lambda)*Q, tc='d')
-        q = matrix(-2*Lambda*(Q.T).dot(wp), tc='d')
+        P = matrix((Q+Lambda*Q_), tc='d')
+        q = matrix(-2*Lambda*(Q_.T).dot(wp), tc='d')
         G = matrix(np.vstack((np.diag([1]*13),np.diag([-1]*13))), tc='d')
         h = matrix([2]*26, tc='d')
         A = matrix(np.vstack((rho, [1]*13)), tc='d')
@@ -107,16 +118,37 @@ for i in range(window, Num_days):
         opt = solvers.qp(P, q, G, h, A, b, options={'show_progress':False})
         w = opt['x']
         wp = np.array(w).reshape(-1,1)
-    Rp = Rp + [wp.T.dot(future_return)[0,0]]
+    Rp = Rp + [wp.T.dot(future_return/250)[0,0]]
 R_opt["r=15%"]=Rp
 
 result = pd.DataFrame(R_opt)
 print(result)
 
 
-plt.plot(range(result.shape[0]),result["beta=0.5"])
+# plt.plot(range(result.shape[0]),result["beta=0.5"])
 
 
-from utils import PnL
-PnL(result)
 
+
+
+
+# Compute PnL
+pnl = PnL(result)
+for i in range(5):
+    plt.plot(pnl[:,i],label=i)
+plt.legend(loc='best')
+plt.show()
+# Geometric mean
+print("Geometric mean",gmean(result))
+# min
+print("Daily min",np.min(result,axis=0))
+# max drawdown
+print('max drawdown: ', MaxDrawdown(result))
+# Vol
+print("Volatility", Volatility(result))
+
+# Sharp Ratio
+RF = np.array(R_bc-ER_bc)[window:,0].reshape(-1,1)/250
+print("Sharp ratio: ", SharpRatio(result,RF))
+print("Mean sharp: ", np.mean(SharpRatio(result,RF),axis=0))
+#
