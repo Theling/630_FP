@@ -58,8 +58,8 @@ def SharpRatio(arr,rf,yearly = False):
     data = np.array(arr).reshape(days, cols)
     # if not yearly:
     #     data = np.power(1+data,250)-1
-    r = np.array(rf).reshape(days,1)
-    ER = np.power(np.product(1+data,axis=0),250/days)-np.mean(r,axis=0)
+    r = np.array(rf).reshape(days,1)*250
+    ER = np.power(np.product(1+data,axis=0),250/days)-np.mean(r,axis=0)-1
     #ER = np.mean(data,axis=0) - np.mean(r, axis=0)
     return ER/Volatility(data)
 
