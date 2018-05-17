@@ -56,12 +56,12 @@ def SharpRatio(arr,rf,yearly = False):
     if not days == row:
         raise RuntimeError("length of columns of inputs do not match (%s, %s)."% (days,row))
     data = np.array(arr).reshape(days, cols)
-    if not yearly:
-        data = np.power(1+data,250)-1
+    # if not yearly:
+    #     data = np.power(1+data,250)-1
     r = np.array(rf).reshape(days,1)
-    # ER = np.power(np.product(1+data,axis=0),250/days)-np.mean(r,axis=0)
-    ER = np.mean(data,axis=0) - np.mean(r, axis=0)
-    return ER/np.std(data,axis=0)
+    ER = np.power(np.product(1+data,axis=0),250/days)-np.mean(r,axis=0)
+    #ER = np.mean(data,axis=0) - np.mean(r, axis=0)
+    return ER/Volatility(data)
 
 def Kurtosis(arr):
     cols,days = _check(arr)
