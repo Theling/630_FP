@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from sklearn.linear_model import LinearRegression
 from cvxopt import matrix, solvers
-from utils import PnL, gmean, MaxDrawdown, Volatility, SharpRatio, Kurtosis, Skewness
+from utils import PnL, gmean, MaxDrawdown, Volatility, SharpRatio, Kurtosis, Skewness, VaR, CVaR, Summary
 
 #download data of ETFs
 ticker = ["FXE","EWJ","GLD","QQQ","SPY","SHV","DBA","USO",
@@ -30,14 +30,21 @@ ER = pd.DataFrame(R.values-F["RF"].values.reshape(-1,1),
 
 F = F.iloc[:,0:3]
 
+# # Before
+# R_bc = R["2007-03-23":"2008-03-23"].values
+# ER_bc = ER["2007-03-23":"2008-03-23"].values
+# F_bc = F["2007-03-23":"2008-03-23"].values
 
-R_bc = R["2008-03-24":"2009-06-30"].values
-ER_bc = ER["2008-03-24":"2009-06-30"].values
-F_bc = F["2008-03-24":"2009-06-30"].values
-# Before crisis("2007-03-26"-"2008-03-23")
-# R_bc = R["2009-06-30":"2016-10-20"].values
-# ER_bc = ER["2009-06-30":"2016-10-20"].values
-# F_bc = F["2009-06-30":"2016-10-20"].values
+# During
+# R_bc = R["2008-03-24":"2009-06-30"].values
+# ER_bc = ER["2008-03-24":"2009-06-30"].values
+# F_bc = F["2008-03-24":"2009-06-30"].values
+
+# After crisis("2007-03-26"-"2008-03-23")
+R_bc = R["2009-06-30":"2016-10-20"].values
+ER_bc = ER["2009-06-30":"2016-10-20"].values
+F_bc = F["2009-06-30":"2016-10-20"].values
+
 Num_days = len(F_bc)
 FR_bc = F_bc[1:].copy()
 #short term model(60 days)
@@ -138,17 +145,34 @@ for i in range(5):
     plt.plot(pnl[:,i],label=i)
 plt.legend(loc='best')
 plt.show()
+
+# result = R_bc.copy()/250
+days = result.shape[0]
+
+print("Last PnL after %s: " % days, PnL(result,100)[-1, :])
 # Geometric mean
-print("Geometric mean",gmean(result))
+print("Geometric mean",gmean(result)*250)
 # min
-print("Daily min",np.min(result,axis=0))
+print("Daily min",np.min(result,axis=0)*250)
 # max drawdown
 print('max drawdown: ', MaxDrawdown(result))
 # Vol
 print("Volatility", Volatility(result))
 
 # Sharp Ratio
-RF = np.array(R_bc-ER_bc)[window:,0].reshape(-1,1)/250
+RF = np.array(R_bc-ER_bc)[:,0].reshape(-1,1)/250
 print("Sharp ratio: ", SharpRatio(result,RF))
-print("Mean sharp: ", np.mean(SharpRatio(result,RF),axis=0))
-#
+# print("Mean sharp: ", np.mean(SharpRatio(result,RF),axis=0))
+
+# Kurtosis
+print("Kurtosis: ", Kurtosis(result))
+print("Skewness: ", Skewness(result))
+print("%s VaR %s days: " % (0.99, days), VaR(result, 0.99))
+print("%s CVaR %s days: " % (0.99, days), CVaR(result, 0.99))
+
+for i in range(result.shape[1]):
+    # print(i)
+    plt.plot((1+result[:,i]).cumprod(),label=ticker[i])
+plt.legend(loc='best')
+# RF = np.array(R_bc - ER_bc)[window:, 0].reshape(-1, 1) / 250
+# Summary(R_bc,RF,0.99)

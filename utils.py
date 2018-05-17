@@ -26,7 +26,7 @@ def PnL(arr,P = 1000000):
 def gmean(arr):
     cols,days = _check(arr)
     data = np.array(arr).reshape(days, cols)
-    return ss.gmean(1+data,axis=0)-1
+    return np.power(np.prod(1+data,axis=0),1/days)-1
 
 def MaxDrawdown(arr, n=10):
     cols,days = _check(arr)
@@ -42,20 +42,26 @@ def MaxDrawdown(arr, n=10):
     #print(np.array(D_).shape)
     return np.max(np.array(D_),axis=0),np.max(np.array(d_),axis=0)
 
-def Volatility(arr):
+def Volatility(arr,yearly=False):
     cols,days = _check(arr)
     data = np.array(arr).reshape(days, cols)
-    return np.sqrt(np.var(data,axis=0))
+    if yearly:
+        return np.sqrt(np.var(data,axis=0))
+    else:
+        return np.sqrt((252/days)*np.sum((data-np.mean(data,axis=0))**2,axis=0))
 
-def SharpRatio(arr,rf):
+def SharpRatio(arr,rf,yearly = False):
     cols,days = _check(arr)
     c,row = _check(rf)
     if not days == row:
         raise RuntimeError("length of columns of inputs do not match (%s, %s)."% (days,row))
+    data = np.array(arr).reshape(days, cols)
+    if not yearly:
+        data = np.power(1+data,250)-1
     r = np.array(rf).reshape(days,1)
-    data = np.array(arr).reshape(days,cols)
-    ER = data-r
-    return ER/Volatility(arr)
+    # ER = np.power(np.product(1+data,axis=0),250/days)-np.mean(r,axis=0)
+    ER = np.mean(data,axis=0) - np.mean(r, axis=0)
+    return ER/np.std(data,axis=0)
 
 def Kurtosis(arr):
     cols,days = _check(arr)
@@ -81,3 +87,27 @@ def CVaR(arr,q):
     # print(tmp)
     n = int(np.around((1 - q) * days))
     return np.mean(-tmp[0:max(0, n - 1),:],axis=0)
+
+def Summary(arr,RF, q=0.99):
+    result = arr
+    cols,days = _check(result)
+    print("Last PnL after %s: " % days,PnL(result)[-1,:])
+    # Geometric mean
+    print("Geometric mean", gmean(result))
+    # min
+    print("Daily min", np.min(result, axis=0))
+    # max drawdown
+    print('max drawdown: ', MaxDrawdown(result))
+    # Vol
+    print("Volatility", Volatility(result))
+
+    # Sharp Ratio
+
+    print("Sharp ratio: ", SharpRatio(result, RF))
+    print("Mean sharp: ", np.mean(SharpRatio(result, RF), axis=0))
+
+    # Kurtosis
+    print("Kurtosis: ", Kurtosis(result))
+    print("Skewness: ", Skewness(result))
+    print("%s VaR %s days: " % (q,days), VaR(result,q))
+    print("%s CVaR %s days: " % (q, days), CVaR(result, q))
